@@ -7,36 +7,7 @@ namespace SiliconValve.Demo.CommunicationServiceEmail
     [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.ReturnValue)]
     public class CommunicationServiceEmailAttribute : Attribute
     {
-        public CommunicationServiceEmailAttribute()
-        {
-        }
-
-        public CommunicationServiceEmailAttribute(string connectionString)
-        {
-            ConnectionString = connectionString;
-        }
-
-        public CommunicationServiceEmailAttribute(string connectionString, string senderAddress)
-        {
-            ConnectionString = connectionString;
-            SenderAddress = senderAddress;
-        }
-
-        public CommunicationServiceEmailAttribute(string connectionString, string senderAddress, string subjectLine)
-        {
-            ConnectionString = connectionString;
-            SenderAddress = senderAddress;
-            SubjectLine = subjectLine;
-        }
-
-        public CommunicationServiceEmailAttribute(string connectionString, string senderAddress, string subjectLine, string recipientAddresses)
-        {
-            ConnectionString = connectionString;
-            SenderAddress = senderAddress;
-            SubjectLine = subjectLine;
-        }
-
-        [AutoResolve]
+        [AppSetting]
         public string ConnectionString {get; set;}
 
         [AutoResolve]
@@ -47,5 +18,11 @@ namespace SiliconValve.Demo.CommunicationServiceEmail
 
         [AutoResolve]
         public string RecipientAddress {get; set;}
+
+        [AutoResolve]
+        public string PlainTextEmailBody {get; set;}
+
+        [AutoResolve]
+        public string HtmlEmailBody {get; set;}
     }
 }

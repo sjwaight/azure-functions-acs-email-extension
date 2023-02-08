@@ -1,13 +1,9 @@
-using Microsoft.Azure.WebJobs;
-using Azure.Communication.Email;
-using Azure.Communication.Email.Models;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using System;
+using Microsoft.Azure.WebJobs;
 using Microsoft.Extensions.Configuration;
 using SiliconValve.Demo.CommunicationServiceEmail.Config;
 using Microsoft.Extensions.DependencyInjection;
+using SiliconValve.Demo.CommunicationServiceEmail.Bindings;
 
 namespace SiliconValve.Demo.CommunicationServiceEmail
 {
@@ -27,7 +23,7 @@ namespace SiliconValve.Demo.CommunicationServiceEmail
                     options.ConnectionString = rootConfig[CommunicationServiceEmailConfigProvider.AzureWebJobsCommunicationServicesEmailConnectionStringName];
 
                     IConfigurationSection section = rootConfig.GetSection(extensionPath);
-                    // SendGridHelpers.ApplyConfiguration(section, options);
+                    CommunicationServiceEmailAsyncCollector.ApplyConfiguration(section, options);
                 });
 
             builder.Services.AddSingleton<ICommunicationServiceEmailClientFactory, DefaultCommunicationServiceEmailClientFactory>();
@@ -35,7 +31,22 @@ namespace SiliconValve.Demo.CommunicationServiceEmail
             return builder;
         }
 
+        public static IWebJobsBuilder AddCommunicationServiceEmail(this IWebJobsBuilder builder, Action<CommunicationServiceEmailOptions> configure)
+        {
+            if (builder == null)
+            {
+                throw new ArgumentNullException(nameof(builder));
+            }
 
+            if (configure == null)
+            {
+                throw new ArgumentNullException(nameof(configure));
+            }
 
+            builder.AddCommunicationServiceEmail();
+            builder.Services.Configure(configure);
+
+            return builder;
+        }
     }
 }

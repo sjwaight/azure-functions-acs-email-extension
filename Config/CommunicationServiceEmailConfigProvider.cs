@@ -15,7 +15,7 @@ namespace SiliconValve.Demo.CommunicationServiceEmail
     [Extension("CommunicationServiceEmail")]
     internal class CommunicationServiceEmailConfigProvider : IExtensionConfigProvider
     {
-        internal const string AzureWebJobsCommunicationServicesEmailConnectionStringName = "AzureWebJobsAcsConnectionString";
+        internal const string AzureWebJobsCommunicationServicesEmailConnectionStringName = "AzureWebJobsAcsEmailConnectionString";
 
         private readonly IOptions<CommunicationServiceEmailOptions> configOptions;
         private ConcurrentDictionary<string, ICommunicationServiceEmailClient> emailClientCache = new ConcurrentDictionary<string, ICommunicationServiceEmailClient>();
@@ -35,12 +35,8 @@ namespace SiliconValve.Demo.CommunicationServiceEmail
                 throw new ArgumentNullException("context");
             }
 
-            // context
-            //     .AddConverter<string, SendGridMessage>(SendGridHelpers.CreateMessage)
-            //     .AddConverter<JObject, SendGridMessage>(SendGridHelpers.CreateMessage);
-
             var rule = context.AddBindingRule<CommunicationServiceEmailAttribute>();
-            // rule.AddValidator(ValidateBinding);
+            rule.AddValidator(ValidateBinding);
             rule.BindToCollector<EmailMessage>(CreateCollector);
       
         }
@@ -55,6 +51,23 @@ namespace SiliconValve.Demo.CommunicationServiceEmail
         private static string FirstOrDefault(params string[] values)
         {
             return values.FirstOrDefault(v => !string.IsNullOrEmpty(v));
-        }        
+        }       
+
+        
+        private void ValidateBinding(CommunicationServiceEmailAttribute attribute, Type type)
+        {
+            ValidateBinding(attribute);
+        }
+
+        private void ValidateBinding(CommunicationServiceEmailAttribute attribute)
+        {
+            string connectionString = FirstOrDefault(attribute.ConnectionString, configOptions.Value.ConnectionString);
+
+            if (string.IsNullOrEmpty(connectionString))
+            {
+                throw new InvalidOperationException(
+                    $"The Communication Service Connection String must be set either via an '{AzureWebJobsCommunicationServicesEmailConnectionStringName}' app setting, via an '{AzureWebJobsCommunicationServicesEmailConnectionStringName}' environment variable, or directly in code via {nameof(CommunicationServiceEmailOptions)}.{nameof(CommunicationServiceEmailOptions.ConnectionString)} or {nameof(CommunicationServiceEmailAttribute)}.{nameof(CommunicationServiceEmailAttribute.ConnectionString)}.");
+            }
+        } 
     }
 }

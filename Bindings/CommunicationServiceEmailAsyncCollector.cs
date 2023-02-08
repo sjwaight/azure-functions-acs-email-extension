@@ -1,12 +1,12 @@
 using Microsoft.Azure.WebJobs;
-using Azure.Communication.Email;
 using Azure.Communication.Email.Models;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using System;
 using System.Collections.Concurrent;
 using SiliconValve.Demo.CommunicationServiceEmail.Client;
+using Microsoft.Extensions.Configuration;
+using System.Linq;
 
 namespace SiliconValve.Demo.CommunicationServiceEmail.Bindings
 {
@@ -41,9 +41,9 @@ namespace SiliconValve.Demo.CommunicationServiceEmail.Bindings
                 throw new ArgumentException("Missing sender email address. You must supply the configured sender email address for your selected Azure Communication Service Email Service.");
             }
 
-            if(mailMessage.Content == null || string.IsNullOrEmpty(mailMessage.Content.Html) || string.IsNullOrEmpty(mailMessage.Content.PlainText))
+            if(mailMessage.Content == null || (string.IsNullOrEmpty(mailMessage.Content.Html) && string.IsNullOrEmpty(mailMessage.Content.PlainText)))
             {
-                throw new ArgumentException("Missing message body. You must supply a message body via either the HtmlEmailBody or PlainTextEmailBody properties.");
+                throw new ArgumentException("Missing message body. You must supply a message body via either the Html or PlainText Content properties.");
             }
 
             PopulateDefaultMessageProperties(mailMessage, configOptions, acsEmailAttribute);
@@ -64,8 +64,9 @@ namespace SiliconValve.Demo.CommunicationServiceEmail.Bindings
          internal static EmailMessage PopulateDefaultMessageProperties(EmailMessage mail, CommunicationServiceEmailOptions options, CommunicationServiceEmailAttribute attribute)
         {
             EmailAddress senderEmail = null;
-            EmailAddress recipientEmail = null;
+            EmailRecipients recipients = null;
             string subjectLine = "";
+            bool newMessageRequired = false;
 
             // Apply message defaulting
             if (string.IsNullOrEmpty(mail.Sender))
@@ -83,6 +84,7 @@ namespace SiliconValve.Demo.CommunicationServiceEmail.Bindings
                 {
                     senderEmail = new EmailAddress(options.SenderAddress);
                 }
+                newMessageRequired = true;
             }
             else
             {
@@ -98,12 +100,17 @@ namespace SiliconValve.Demo.CommunicationServiceEmail.Bindings
                     {
                         throw new ArgumentException("Invalid 'To' address specified");
                     }
-                    recipientAddress = to;
+                    recipients.To.Add(to);
                 }
                 else if (!string.IsNullOrEmpty(options.RecipientAddress))
                 {
-                    recipientAddress = new EmailAddress(options.RecipientAddress);
+                    recipients.To.Add(new EmailAddress(options.RecipientAddress));
                 }
+                newMessageRequired = true;
+            }
+            else
+            {
+                recipients = mail.Recipients;
             }
 
             if (string.IsNullOrEmpty(mail.Content.Subject))
@@ -116,71 +123,30 @@ namespace SiliconValve.Demo.CommunicationServiceEmail.Bindings
                 {
                     subjectLine = options.Subject;
                 }
+                newMessageRequired = true;
             }
-
-            if(senderEmail == null && recipientAddress == null && string.IsNullOrEmpty(subjectLine)
-        }
-
-
-        internal static EmailAddress Apply(EmailAddress current, string value)
-        {
-            EmailAddress mail;
-            if (TryParseAddress(value, out mail))
+            else
             {
-                return mail;
+                subjectLine = mail.Content.Subject;
             }
-            return current;
-        }
 
-        internal static bool TryParseAddress(string value, out EmailAddress email)
-        {
-            email = null;
-
-            if (string.IsNullOrEmpty(value))
+            if(newMessageRequired)
             {
-                return false;
+                EmailContent newContent = new EmailContent(subjectLine)
+                                                {   
+                                                    Html = mail.Content.Html,
+                                                    PlainText = mail.Content.PlainText
+                                                };
+                return new EmailMessage(senderEmail.Email, newContent, recipients);
             }
-
-            try
-            {
-                // MailAddress will auto-parse the name from a string like "testuser@test.com <Test User>"
-                EmailAddress mailAddress = new EmailAddress(value);
-                string displayName = string.IsNullOrEmpty(mailAddress.DisplayName) ? null : mailAddress.DisplayName;
-                email = new EmailAddress(mailAddress.Email, displayName);
-                return true;
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
-        }
-
-        internal static EmailMessage CreateMessage(string input)
-        {
-            JObject json = JObject.Parse(input);
-            return CreateMessage(json);
-        }
-
-        internal static EmailMessage CreateMessage(JObject input)
-        {
-            return input.ToObject<SendGridMessage>();
-        }
-
-        internal static string CreateString(EmailMessage input)
-        {
-            return CreateString(JObject.FromObject(input));
-        }
-
-        internal static string CreateString(JObject input)
-        {
-            return input.ToString(Formatting.None);
+            return mail;
         }
 
         internal static bool IsRecipientValid(EmailMessage item)
         {
-            return item.Personalizations != null &&
-                item.Personalizations.Count > 0 &&
-                item.Personalizations.All(p => p.Tos != null && !p.Tos.Any(t => string.IsNullOrEmpty(t.Email)));
+            return item.Recipients != null &&
+                item.Recipients.To.Count > 0 &&
+                item.Recipients.To.All(t => !string.IsNullOrEmpty(t.Email));
         }
 
         internal static void ApplyConfiguration(IConfiguration config, CommunicationServiceEmailOptions options)
@@ -192,10 +158,32 @@ namespace SiliconValve.Demo.CommunicationServiceEmail.Bindings
 
             config.Bind(options);
 
-            string to = config.GetValue<string>("to");
-            string from = config.GetValue<string>("from");
-            options.RecipientAddress = Apply(options.RecipientAddress, to);
-            options.SenderAddress = Apply(options.SenderAddress, from);
+            options.RecipientAddress = config.GetValue<string>("RecipientAddress");
+            options.SenderAddress = config.GetValue<string>("SenderAddress");
+            options.Subject = config.GetValue<string>("Subject");
+            // these are read, but are not currently used in the logic.
+            options.HtmlEmailBody = config.GetValue<string>("HtmlEmailBody");
+            options.PlainTextEmailBody = config.GetValue<string>("PlainTextEmailBody");
+        }
+        
+        internal static bool TryParseAddress(string value, out EmailAddress email)
+        {
+            email = null;
+
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            try
+            {
+                email = new EmailAddress(value);
+                return true;
+            }
+            catch (FormatException)
+            {
+                return false;
+            }
         }
     }
 }
